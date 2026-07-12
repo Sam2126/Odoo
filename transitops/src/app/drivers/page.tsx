@@ -1,18 +1,19 @@
 "use client";
 
 import React, { useState } from "react";
-import { useTransitStore, DriverStatus, getPermission } from "@/lib/store";
-import { Plus, Search, Users, AlertTriangle, X, ShieldAlert } from "lucide-react";
+import { useTransitStore, DriverStatus, getPermission, Driver, isLicenseExpired } from "@/lib/store";
+import { Plus, Search, AlertTriangle, X, ShieldAlert, Mail, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Drivers() {
-  const { drivers, addDriver, updateDriver, currentUser } = useTransitStore();
+  const { drivers, addDriver, updateDriver, currentUser, addActivity, deleteDriver } = useTransitStore();
   const writeAccess = currentUser ? getPermission(currentUser.role, "drivers") === "write" : false;
 
   // Search and Filter State
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
+  const [sortBy, setSortBy] = useState("name");
 
   // Modal State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -22,6 +23,22 @@ export default function Drivers() {
   const [licenseExpiry, setLicenseExpiry] = useState("");
   const [contactNumber, setContactNumber] = useState("");
   const [safetyScore, setSafetyScore] = useState("100");
+
+  // Edit Modal State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editLicenseNumber, setEditLicenseNumber] = useState("");
+  const [editLicenseCategory, setEditLicenseCategory] = useState<"LMV" | "HMV">("LMV");
+  const [editLicenseExpiry, setEditLicenseExpiry] = useState("");
+  const [editContactNumber, setEditContactNumber] = useState("");
+  const [editSafetyScore, setEditSafetyScore] = useState("100");
+
+  // Email Expiry Reminder State
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [selectedEmailDriver, setSelectedEmailDriver] = useState<Driver | null>(null);
+  const [emailSubject, setEmailSubject] = useState("Driving License Expiration Renewal Alert");
+  const [emailBody, setEmailBody] = useState("");
 
   const handleAddDriver = (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +72,29 @@ export default function Drivers() {
     }
   };
 
+  const handleEditDriverSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!editName || !editLicenseNumber || !editLicenseExpiry || !editContactNumber || !editSafetyScore) {
+      toast.error("Please fill in all fields.");
+      return;
+    }
+
+    if (editingDriver) {
+      updateDriver(editingDriver.id, {
+        name: editName,
+        licenseNumber: editLicenseNumber.toUpperCase(),
+        licenseCategory: editLicenseCategory,
+        licenseExpiry: editLicenseExpiry,
+        contactNumber: editContactNumber,
+        safetyScore: Number(editSafetyScore)
+      });
+      toast.success("Driver properties updated successfully!");
+      setShowEditModal(false);
+      setEditingDriver(null);
+    }
+  };
+
   const toggleStatus = (id: string, currentStatus: DriverStatus) => {
     if (!writeAccess) {
       toast.error("Access Restricted: View Only Mode.");
@@ -74,6 +114,19 @@ export default function Drivers() {
     const matchesStatus = filterStatus === "All" || d.status === filterStatus;
     
     return matchesSearch && matchesCategory && matchesStatus;
+  });
+
+  // Sorted drivers
+  const sortedDrivers = [...filteredDrivers].sort((a, b) => {
+    if (sortBy === "name") return a.name.localeCompare(b.name);
+    if (sortBy === "safetyScore") return b.safetyScore - a.safetyScore;
+    if (sortBy === "licenseExpiry") {
+      const expA = a.licenseExpiry.includes("EXPIRED") ? 0 : 1;
+      const expB = b.licenseExpiry.includes("EXPIRED") ? 0 : 1;
+      if (expA !== expB) return expA - expB;
+      return a.licenseExpiry.localeCompare(b.licenseExpiry);
+    }
+    return 0;
   });
 
   return (
@@ -119,6 +172,16 @@ export default function Drivers() {
             <option value="Off Duty">Off Duty</option>
             <option value="Suspended">Suspended</option>
           </select>
+
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 focus:outline-none"
+          >
+            <option value="name">Sort by Name</option>
+            <option value="safetyScore">Sort by Safety Score</option>
+            <option value="licenseExpiry">Sort by Expiry (Urgent)</option>
+          </select>
         </div>
 
         {/* Search Input */}
@@ -144,21 +207,23 @@ export default function Drivers() {
                 <th className="px-6 py-3.5">License No</th>
                 <th className="px-6 py-3.5">Category</th>
                 <th className="px-6 py-3.5">Expiry</th>
+                <th className="px-6 py-3.5 text-center">Remind</th>
                 <th className="px-6 py-3.5">Contact</th>
                 <th className="px-6 py-3.5 text-center">Safety Score</th>
                 <th className="px-6 py-3.5 text-center">Status</th>
+                <th className="px-6 py-3.5 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs text-slate-700 dark:text-slate-300">
-              {filteredDrivers.length === 0 ? (
+              {sortedDrivers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan={9} className="px-6 py-12 text-center text-slate-400 dark:text-slate-500">
                     No drivers found matching the filters
                   </td>
                 </tr>
               ) : (
-                filteredDrivers.map((d) => {
-                  const isExpired = d.licenseExpiry.toUpperCase().includes("EXPIRED");
+                sortedDrivers.map((d) => {
+                  const isExpired = isLicenseExpired(d.licenseExpiry);
                   return (
                     <tr key={d.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
                       <td className="px-6 py-4 font-bold text-slate-900 dark:text-white flex items-center gap-3">
@@ -174,6 +239,24 @@ export default function Drivers() {
                           {d.licenseExpiry}
                           {isExpired && <ShieldAlert size={12} className="shrink-0 text-red-500 animate-pulse" />}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {isExpired ? (
+                          <button
+                            onClick={() => {
+                              setSelectedEmailDriver(d);
+                              setEmailSubject(`License Renewal Alert — ${d.name}`);
+                              setEmailBody(`Dear ${d.name},\n\nOur system records show that your ${d.licenseCategory} driving license (${d.licenseNumber}) is expiring or has expired (${d.licenseExpiry}).\n\nPlease submit an updated copy of your valid license to the safety office immediately to prevent dispatch suspension.\n\nBest regards,\nTransitOps Operations Team`);
+                              setShowEmailModal(true);
+                            }}
+                            className="text-amber-600 hover:text-amber-500 dark:text-amber-400 dark:hover:text-amber-300 font-bold inline-flex items-center gap-1 text-[10px] bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+                          >
+                            <Mail size={11} />
+                            <span>Remind</span>
+                          </button>
+                        ) : (
+                          <span className="text-slate-400 dark:text-slate-600 text-[10px]">—</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 font-mono text-slate-400">{d.contactNumber}</td>
                       <td className="px-6 py-4 text-center font-semibold">
@@ -205,6 +288,42 @@ export default function Drivers() {
                         >
                           {d.status}
                         </button>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {writeAccess ? (
+                          <div className="flex justify-center items-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                setEditingDriver(d);
+                                setEditName(d.name);
+                                setEditLicenseNumber(d.licenseNumber);
+                                setEditLicenseCategory(d.licenseCategory);
+                                setEditLicenseExpiry(d.licenseExpiry);
+                                setEditContactNumber(d.contactNumber);
+                                setEditSafetyScore(String(d.safetyScore));
+                                setShowEditModal(true);
+                              }}
+                              className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                              title="Edit Driver Details"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to permanently delete driver profile for ${d.name}?`)) {
+                                  deleteDriver(d.id);
+                                  toast.success(`Driver ${d.name} deleted.`);
+                                }
+                              }}
+                              className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1.5 rounded-md hover:bg-red-500/10 transition-colors cursor-pointer"
+                              title="Delete Driver"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 dark:text-slate-600 text-[10px]">—</span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -268,7 +387,7 @@ export default function Drivers() {
                   </label>
                   <select
                     value={licenseCategory}
-                    onChange={(e) => setLicenseCategory(e.target.value as any)}
+                    onChange={(e) => setLicenseCategory(e.target.value as "LMV" | "HMV")}
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-950 dark:text-white focus:outline-none"
                   >
                     <option value="LMV">LMV (Light)</option>
@@ -336,6 +455,213 @@ export default function Drivers() {
                   className="bg-[#B26A00] hover:bg-[#8F5500] text-white px-4 py-2 rounded-lg text-xs font-semibold shadow-lg shadow-orange-950/20"
                 >
                   Register Driver
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EMAIL EXPIRY REMINDER MODAL */}
+      {showEmailModal && selectedEmailDriver && (
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/40">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+                  <Mail className="text-blue-500" size={16} />
+                  <span>Send License Expiration Reminder</span>
+                </h3>
+                <p className="text-[10px] text-slate-400 font-mono mt-0.5">TO: {selectedEmailDriver.name} ({selectedEmailDriver.licenseNumber})</p>
+              </div>
+              <button onClick={() => setShowEmailModal(false)} className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 cursor-pointer">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              addActivity("system", `Email renewal warning sent to driver ${selectedEmailDriver.name} for license ${selectedEmailDriver.licenseNumber}.`);
+              toast.success(`Reminder email dispatched to ${selectedEmailDriver.name} successfully!`);
+              setShowEmailModal(false);
+            }} className="p-6 space-y-4">
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                  Recipient Email
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={`${selectedEmailDriver.name.toLowerCase().replace(/\s+/g, '')}@transitops.in`}
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                  Subject
+                </label>
+                <input
+                  type="text"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-950 dark:text-white focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                  Email Message Body
+                </label>
+                <textarea
+                  rows={6}
+                  value={emailBody}
+                  onChange={(e) => setEmailBody(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-950 dark:text-white focus:outline-none font-sans"
+                  required
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowEmailModal(false)}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-xs font-semibold text-slate-500 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  <Mail size={12} />
+                  <span>Send Email Warning</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT DRIVER DIALOG MODAL */}
+      {showEditModal && editingDriver && (
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/40">
+              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">Edit Driver Profile</h3>
+              <button onClick={() => {
+                setShowEditModal(false);
+                setEditingDriver(null);
+              }} className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 cursor-pointer">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditDriverSubmit} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    Driver Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-950 dark:text-white placeholder-slate-400 focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    License Number
+                  </label>
+                  <input
+                    type="text"
+                    value={editLicenseNumber}
+                    onChange={(e) => setEditLicenseNumber(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-950 dark:text-white placeholder-slate-400 focus:outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    License Category
+                  </label>
+                  <select
+                    value={editLicenseCategory}
+                    onChange={(e) => setEditLicenseCategory(e.target.value as "LMV" | "HMV")}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs text-slate-950 dark:text-white focus:outline-none"
+                  >
+                    <option value="LMV">LMV (Light Motor)</option>
+                    <option value="HMV">HMV (Heavy Motor)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    Expiry Date (MM/YYYY)
+                  </label>
+                  <input
+                    type="text"
+                    value={editLicenseExpiry}
+                    onChange={(e) => setEditLicenseExpiry(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-950 dark:text-white placeholder-slate-400 focus:outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    Contact Number
+                  </label>
+                  <input
+                    type="text"
+                    value={editContactNumber}
+                    onChange={(e) => setEditContactNumber(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-950 dark:text-white placeholder-slate-400 focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    Safety Score (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={editSafetyScore}
+                    onChange={(e) => setEditSafetyScore(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-950 dark:text-white placeholder-slate-400 focus:outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingDriver(null);
+                  }}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-xs font-semibold text-slate-500 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-xs font-semibold shadow-lg transition-colors cursor-pointer"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>

@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { useTransitStore, MaintenanceLog, getPermission } from "@/lib/store";
-import { Wrench, ArrowRight, X, AlertTriangle, Plus } from "lucide-react";
+import { useTransitStore, getPermission } from "@/lib/store";
+import { Wrench, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Maintenance() {
@@ -132,7 +132,7 @@ export default function Maintenance() {
             </label>
             <select
               value={status}
-              onChange={(e) => setStatus(e.target.value as any)}
+              onChange={(e) => setStatus(e.target.value as "Active" | "Closed")}
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs text-slate-950 dark:text-white focus:outline-none"
             >
               <option value="Active">Active (In Shop)</option>

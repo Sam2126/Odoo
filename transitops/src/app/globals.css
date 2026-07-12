@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
+@variant dark (&:where(.dark, .dark *));
 
 @theme {
   --color-brand-primary: #1E3A5F;
@@ -93,4 +93,42 @@ body {
 .dark .skeleton-shimmer {
   background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
   background-size: 200% 100%;
+}
+
+/* Print Rules for Professional PDF Reports */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  
+  /* Hide sidebar and headers/footers of the browser wrapper */
+  aside, 
+  nav, 
+  header,
+  .print\:hidden,
+  button,
+  select,
+  input {
+    display: none !important;
+  }
+
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  .bg-white,
+  .dark\.bg-slate-900 {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Make sure text colors are high contrast */
+  .text-slate-900,
+  .dark\.text-white {
+    color: black !important;
+  }
 }
