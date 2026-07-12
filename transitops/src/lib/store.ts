@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type Role = "FLEET_MANAGER" | "DISPATCHER" | "SAFETY_OFFICER" | "FINANCIAL_ANALYST";
+export type Role = "FLEET_MANAGER" | "DRIVER" | "SAFETY_OFFICER" | "FINANCIAL_ANALYST";
 
 export type VehicleStatus = "Available" | "On Trip" | "In Shop" | "Retired";
 export type DriverStatus = "Available" | "On Trip" | "Off Duty" | "Suspended";
@@ -13,6 +13,14 @@ export interface User {
   role: Role;
 }
 
+export interface VehicleDocument {
+  id: string;
+  name: string;
+  fileName: string;
+  status: "Active" | "Expired";
+  expiryDate: string;
+}
+
 export interface Vehicle {
   id: string;
   regNumber: string;
@@ -22,6 +30,7 @@ export interface Vehicle {
   odometer: number; // in km
   acquisitionCost: number; // in INR
   status: VehicleStatus;
+  documents?: VehicleDocument[];
 }
 
 export interface Driver {
@@ -94,10 +103,10 @@ export interface ActivityLog {
 
 // Initial Predefined Users (Credentials for RBAC)
 export const PREDEFINED_USERS: Record<string, User & { password?: string }> = {
-  "manager@transitops.in": { name: "Vikram Mehta", role: "FLEET_MANAGER", email: "manager@transitops.in" },
-  "dispatcher@transitops.in": { name: "Raven K.", role: "DISPATCHER", email: "dispatcher@transitops.in" },
-  "safety@transitops.in": { name: "Neha Sharma", role: "SAFETY_OFFICER", email: "safety@transitops.in" },
-  "analyst@transitops.in": { name: "Amit Patel", role: "FINANCIAL_ANALYST", email: "analyst@transitops.in" }
+  "manager@transitops.in": { name: "Vikram Mehta", role: "FLEET_MANAGER", email: "manager@transitops.in", password: "password123" },
+  "driver@transitops.in": { name: "Raven K.", role: "DRIVER", email: "driver@transitops.in", password: "password123" },
+  "safety@transitops.in": { name: "Neha Sharma", role: "SAFETY_OFFICER", email: "safety@transitops.in", password: "password123" },
+  "analyst@transitops.in": { name: "Amit Patel", role: "FINANCIAL_ANALYST", email: "analyst@transitops.in", password: "password123" }
 };
 
 interface TransitOpsState {
@@ -122,8 +131,11 @@ interface TransitOpsState {
   // Mutations
   addVehicle: (vehicle: Omit<Vehicle, "id">) => { success: boolean; error?: string };
   updateVehicle: (id: string, updates: Partial<Vehicle>) => void;
+  deleteVehicle: (id: string) => void;
+  uploadVehicleDocument: (vehicleId: string, doc: Omit<VehicleDocument, "id">) => void;
   addDriver: (driver: Omit<Driver, "id">) => { success: boolean; error?: string };
   updateDriver: (id: string, updates: Partial<Driver>) => void;
+  deleteDriver: (id: string) => void;
   addTrip: (trip: Omit<Trip, "id" | "status" | "startOdometer" | "date">) => { success: boolean; error?: string };
   dispatchTrip: (id: string) => { success: boolean; error?: string };
   completeTrip: (id: string, finalOdometer: number, fuelConsumed: number) => { success: boolean; error?: string };
@@ -139,8 +151,13 @@ interface TransitOpsState {
 
 // 20 Seed Vehicles
 const SEED_VEHICLES: Vehicle[] = [
-  { id: "v1", regNumber: "GJ01AB4521", model: "VAN-05", type: "Van", capacity: 500, odometer: 74000, acquisitionCost: 620000, status: "Available" },
-  { id: "v2", regNumber: "GJ01AB9981", model: "TRUCK-11", type: "Truck", capacity: 5000, odometer: 182000, acquisitionCost: 2450000, status: "On Trip" },
+  { id: "v1", regNumber: "GJ01AB4521", model: "VAN-05", type: "Van", capacity: 500, odometer: 74000, acquisitionCost: 620000, status: "Available", documents: [
+    { id: "doc1", name: "Insurance Policy Certificate", fileName: "van05_insurance_2026.pdf", status: "Active", expiryDate: "12/2026" },
+    { id: "doc2", name: "Pollution Under Control (PUC)", fileName: "van05_puc_expired.pdf", status: "Expired", expiryDate: "05/2025" }
+  ] },
+  { id: "v2", regNumber: "GJ01AB9981", model: "TRUCK-11", type: "Truck", capacity: 5000, odometer: 182000, acquisitionCost: 2450000, status: "On Trip", documents: [
+    { id: "doc3", name: "National Road Permit", fileName: "truck11_permit_2027.pdf", status: "Active", expiryDate: "08/2027" }
+  ] },
   { id: "v3", regNumber: "GJ01AB1120", model: "MINI-03", type: "Mini", capacity: 1000, odometer: 66000, acquisitionCost: 410000, status: "In Shop" },
   { id: "v4", regNumber: "GJ01AB0008", model: "VAN-09", type: "Van", capacity: 750, odometer: 241900, acquisitionCost: 590000, status: "Retired" },
   { id: "v5", regNumber: "GJ01AB2231", model: "TRUCK-04", type: "Truck", capacity: 8000, odometer: 125000, acquisitionCost: 2800000, status: "Available" },
@@ -262,7 +279,7 @@ const LOCAL_STORAGE_KEY = "transitops_v1_store";
 // Helper to load state from local storage or use defaults
 const getInitialState = () => {
   const defaults = {
-    currentUser: PREDEFINED_USERS["dispatcher@transitops.in"], // Default to Dispatcher (Raven K.) for mockup matching
+    currentUser: PREDEFINED_USERS["driver@transitops.in"], // Default to Driver (Raven K.) for mockup matching
     vehicles: SEED_VEHICLES,
     drivers: SEED_DRIVERS,
     trips: SEED_TRIPS,
@@ -367,6 +384,41 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
       });
     },
 
+    deleteVehicle: (id) => {
+      const v = get().vehicles.find((veh) => veh.id === id);
+      set((state) => {
+        const updated = state.vehicles.filter((veh) => veh.id !== id);
+        saveState({ vehicles: updated });
+        return { vehicles: updated };
+      });
+      if (v) {
+        get().addActivity("system", `Removed vehicle ${v.model} (${v.regNumber}) from fleet.`);
+      }
+    },
+
+    uploadVehicleDocument: (vehicleId, doc) => {
+      const newDoc: VehicleDocument = {
+        ...doc,
+        id: `doc_${Date.now()}`
+      };
+      set((state) => {
+        const updated = state.vehicles.map((v) => {
+          if (v.id === vehicleId) {
+            const docs = v.documents || [];
+            return {
+              ...v,
+              documents: [...docs, newDoc]
+            };
+          }
+          return v;
+        });
+        saveState({ vehicles: updated });
+        return { vehicles: updated };
+      });
+      const vehicle = get().vehicles.find(v => v.id === vehicleId);
+      get().addActivity("system", `Uploaded document '${doc.name}' for ${vehicle ? vehicle.model : "vehicle"}.`);
+    },
+
     addDriver: (driver) => {
       // Enforce unique license numbers
       const exists = get().drivers.some(
@@ -392,8 +444,20 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
       set((state) => {
         const updated = state.drivers.map((d) => (d.id === id ? { ...d, ...updates } : d));
         saveState({ drivers: updated });
+        return { vehicles: state.vehicles, drivers: updated };
+      });
+    },
+
+    deleteDriver: (id) => {
+      const d = get().drivers.find((drv) => drv.id === id);
+      set((state) => {
+        const updated = state.drivers.filter((drv) => drv.id !== id);
+        saveState({ drivers: updated });
         return { drivers: updated };
       });
+      if (d) {
+        get().addActivity("system", `Removed driver ${d.name} from directory.`);
+      }
     },
 
     addTrip: (trip) => {
@@ -405,7 +469,7 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
 
       // Check driver eligibility (expired license check)
       const driver = get().drivers.find((d) => d.id === trip.driverId);
-      if (driver && driver.licenseExpiry.toUpperCase().includes("EXPIRED")) {
+      if (driver && isLicenseExpired(driver.licenseExpiry)) {
         return { success: false, error: "Cannot assign driver with expired license." };
       }
       if (driver && driver.status === "Suspended") {
@@ -640,7 +704,7 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
         localStorage.removeItem(LOCAL_STORAGE_KEY);
       }
       set({
-        currentUser: PREDEFINED_USERS["dispatcher@transitops.in"],
+        currentUser: PREDEFINED_USERS["driver@transitops.in"],
         vehicles: SEED_VEHICLES,
         drivers: SEED_DRIVERS,
         trips: SEED_TRIPS,
@@ -669,7 +733,7 @@ export function getPermission(role: Role, module: 'fleet' | 'drivers' | 'trips' 
       fuelExp: 'none',
       analytics: 'write'
     },
-    DISPATCHER: {
+    DRIVER: {
       fleet: 'view',
       drivers: 'none',
       trips: 'write',
@@ -695,4 +759,26 @@ export function getPermission(role: Role, module: 'fleet' | 'drivers' | 'trips' 
     }
   };
   return matrix[role][module];
+}
+
+export function isLicenseExpired(expiryStr: string): boolean {
+  if (!expiryStr) return false;
+  // If it contains "EXPIRED", it is immediately expired
+  if (expiryStr.toUpperCase().includes("EXPIRED")) return true;
+  
+  const parts = expiryStr.trim().split("/");
+  if (parts.length < 2) return false;
+  
+  const month = parseInt(parts[0], 10);
+  const year = parseInt(parts[1], 10);
+  if (isNaN(month) || isNaN(year)) return false;
+  
+  // Current system date is July 2026
+  const CURRENT_YEAR = 2026;
+  const CURRENT_MONTH = 7;
+  
+  if (year < CURRENT_YEAR) return true;
+  if (year === CURRENT_YEAR && month < CURRENT_MONTH) return true;
+  
+  return false;
 }
