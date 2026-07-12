@@ -22,11 +22,11 @@ import {
   LogOut,
   Sparkles,
   Command,
-  HelpCircle,
   Shield
 } from "lucide-react";
 import CommandPalette from "./CommandPalette";
 import DemoTour from "./DemoTour";
+import { toast } from "sonner";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -39,22 +39,31 @@ export default function AppShell({ children }: AppShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showRoleMenu, setShowRoleMenu] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const savedTheme = localStorage.getItem("theme");
+      const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      return savedTheme === "dark" || (!savedTheme && systemPrefersDark);
+    }
+    return false;
+  });
   const [isCommandOpen, setIsCommandOpen] = useState(false);
 
-  // Sync dark mode
   useEffect(() => {
-    const savedTheme = localStorage.getItem("theme");
-    const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    
-    if (savedTheme === "dark" || (!savedTheme && systemPrefersDark)) {
+    setTimeout(() => {
+      setMounted(true);
+    }, 0);
+  }, []);
+
+  // Sync dark mode class with state
+  useEffect(() => {
+    if (isDarkMode) {
       document.documentElement.classList.add("dark");
-      setIsDarkMode(true);
     } else {
       document.documentElement.classList.remove("dark");
-      setIsDarkMode(false);
     }
-  }, []);
+  }, [isDarkMode]);
 
   const toggleDarkMode = () => {
     if (isDarkMode) {
@@ -117,7 +126,7 @@ export default function AppShell({ children }: AppShellProps) {
   // Map roles to displays
   const roleDisplay: Record<Role, string> = {
     FLEET_MANAGER: "Fleet Manager",
-    DISPATCHER: "Dispatcher",
+    DRIVER: "Driver",
     SAFETY_OFFICER: "Safety Officer",
     FINANCIAL_ANALYST: "Financial Analyst",
   };
@@ -130,9 +139,8 @@ export default function AppShell({ children }: AppShellProps) {
     <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950 transition-colors duration-200">
       {/* Collapsible Sidebar */}
       <aside
-        className={`bg-[#0F172A] text-slate-100 flex flex-col justify-between transition-all duration-300 z-30 ${
-          sidebarCollapsed ? "w-16" : "w-64"
-        } border-r border-slate-800 shrink-0`}
+        className={`bg-[#0F172A] text-slate-100 flex flex-col justify-between transition-all duration-300 z-30 ${sidebarCollapsed ? "w-16" : "w-64"
+          } border-r border-slate-800 shrink-0`}
       >
         <div>
           {/* Logo Section */}
@@ -160,18 +168,17 @@ export default function AppShell({ children }: AppShellProps) {
 
           {/* Navigation Links */}
           <nav className="p-3 space-y-1">
-            {visibleLinks.map((link) => {
+            {(mounted ? visibleLinks : navLinks).map((link) => {
               const Icon = link.icon;
               const isActive = pathname.startsWith(link.href) || (link.href === "/dashboard" && pathname === "/");
               return (
                 <Link
                   key={link.name}
                   href={link.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
-                    isActive
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${isActive
                       ? "bg-blue-600 text-white shadow-md shadow-blue-900/20"
                       : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
-                  }`}
+                    }`}
                   title={sidebarCollapsed ? link.name : ""}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
@@ -223,7 +230,7 @@ export default function AppShell({ children }: AppShellProps) {
             <span className="text-sm font-medium text-slate-500 dark:text-slate-400 capitalize hidden sm:inline">
               TransitOps / <span className="text-slate-800 dark:text-slate-200 font-semibold">{activeLink.name}</span>
             </span>
-            
+
             {/* Search Bar / Ctrl+K trigger */}
             <button
               onClick={() => setIsCommandOpen(true)}
@@ -252,9 +259,9 @@ export default function AppShell({ children }: AppShellProps) {
             <button
               onClick={toggleDarkMode}
               className="p-2 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              title={isDarkMode ? "Light Mode" : "Dark Mode"}
+              title={mounted && isDarkMode ? "Light Mode" : "Dark Mode"}
             >
-              {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              {mounted && isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
 
             {/* Notifications Bell */}
@@ -269,7 +276,7 @@ export default function AppShell({ children }: AppShellProps) {
                   <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                 )}
               </button>
-              
+
               {/* Notifications Dropdown */}
               {showNotifications && (
                 <div className="absolute right-0 mt-2 w-80 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
@@ -299,15 +306,14 @@ export default function AppShell({ children }: AppShellProps) {
                           className="px-4 py-2.5 border-b last:border-0 border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 flex gap-2.5 items-start text-xs transition-colors"
                         >
                           <span
-                            className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                              n.type === "error"
+                            className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${n.type === "error"
                                 ? "bg-red-500"
                                 : n.type === "warning"
-                                ? "bg-amber-500"
-                                : n.type === "success"
-                                ? "bg-emerald-500"
-                                : "bg-blue-500"
-                            }`}
+                                  ? "bg-amber-500"
+                                  : n.type === "success"
+                                    ? "bg-emerald-500"
+                                    : "bg-blue-500"
+                              }`}
                           />
                           <div className="flex-1 min-w-0">
                             <p className="text-slate-600 dark:text-slate-300 leading-normal">{n.message}</p>
@@ -344,11 +350,10 @@ export default function AppShell({ children }: AppShellProps) {
                         setShowRoleMenu(false);
                         router.refresh();
                       }}
-                      className={`w-full text-left px-4 py-2 text-xs flex flex-col transition-colors ${
-                        currentUser.role === user.role
+                      className={`w-full text-left px-4 py-2 text-xs flex flex-col transition-colors ${currentUser.role === user.role
                           ? "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium"
                           : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/40"
-                      }`}
+                        }`}
                     >
                       <span>{user.name}</span>
                       <span className="text-[10px] text-slate-400 font-normal">{roleDisplay[user.role]}</span>
@@ -373,7 +378,7 @@ export default function AppShell({ children }: AppShellProps) {
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-sm">
                 Your current role <strong>{roleDisplay[currentUser.role]}</strong> is not authorized to view the <strong>{activeLink.name}</strong> module.
               </p>
-              <button 
+              <button
                 onClick={() => setShowRoleMenu(true)}
                 className="mt-6 bg-[#1E3A5F] hover:bg-[#152a46] text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-md transition-all active:scale-95"
               >
@@ -397,18 +402,28 @@ export default function AppShell({ children }: AppShellProps) {
 // LOGIN COMPONENT
 // -------------------------------------------------------------
 function LoginScreen() {
-  const { setCurrentUser } = useTransitStore();
-  const [email, setEmail] = useState("dispatcher@transitops.in");
+  const { setCurrentUser, registeredUsers, registerUser } = useTransitStore();
+  const [isSignUp, setIsSignUp] = useState(true);
+
+  // Sign In inputs
+  const [email, setEmail] = useState("driver@transitops.in");
   const [password, setPassword] = useState("password123");
-  const [role, setRole] = useState<Role>("DISPATCHER");
+  const [role, setRole] = useState<Role>("DRIVER");
+
+  // Sign Up inputs
+  const [signUpName, setSignUpName] = useState("");
+  const [signUpEmail, setSignUpEmail] = useState("");
+  const [signUpPassword, setSignUpPassword] = useState("");
+  const [signUpRole, setSignUpRole] = useState<Role>("DRIVER");
+
   const [errorState, setErrorState] = useState<string | null>(null);
 
   const handleSignIn = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Check credentials matching predefined list
-    const foundUser = Object.values(PREDEFINED_USERS).find(
-      (u) => u.email === email && role === u.role
+
+    // Check credentials matching registered list
+    const foundUser = registeredUsers.find(
+      (u) => u.email === email && u.role === role && u.password === password
     );
 
     if (foundUser) {
@@ -419,13 +434,41 @@ function LoginScreen() {
     }
   };
 
+  const handleSignUp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!signUpName.trim() || !signUpEmail.trim() || !signUpPassword.trim()) {
+      setErrorState("Please fill in all fields.");
+      return;
+    }
+
+    const res = registerUser({
+      name: signUpName,
+      email: signUpEmail,
+      password: signUpPassword,
+      role: signUpRole
+    });
+
+    if (res.success) {
+      // Auto sign in the newly registered user
+      setCurrentUser({
+        name: signUpName,
+        email: signUpEmail,
+        role: signUpRole
+      });
+      setErrorState(null);
+      toast.success("Account created successfully!");
+    } else {
+      setErrorState(res.error || "Failed to create account.");
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#0F172A] text-slate-100 font-sans transition-colors duration-200">
       {/* Left panel */}
       <div className="flex-1 bg-slate-900 border-r border-slate-800 flex flex-col justify-between p-12 select-none relative overflow-hidden">
         {/* Glow Effects */}
         <div className="absolute top-[-50%] left-[-50%] w-[200%] h-[200%] bg-radial from-blue-900/10 via-transparent to-transparent z-0 pointer-events-none" />
-        
+
         <div className="z-10">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-blue-500 to-emerald-500 flex items-center justify-center shadow-lg">
@@ -467,100 +510,211 @@ function LoginScreen() {
       {/* Right Form panel */}
       <div className="flex-1 flex flex-col justify-center items-center p-8 bg-[#0B0F19] relative">
         <div className="w-full max-w-sm">
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold text-white tracking-tight mb-1.5">Sign in to your account</h1>
-            <p className="text-xs text-slate-400">Enter your credentials to continue</p>
-          </div>
-
-          <form onSubmit={handleSignIn} className="space-y-4.5">
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-150"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-150"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                Role (RBAC)
-              </label>
-              <select
-                value={role}
-                onChange={(e) => {
-                  const selectedRole = e.target.value as Role;
-                  setRole(selectedRole);
-                  // Match email helper to make demo signin easy
-                  const emails: Record<Role, string> = {
-                    FLEET_MANAGER: "manager@transitops.in",
-                    DISPATCHER: "dispatcher@transitops.in",
-                    SAFETY_OFFICER: "safety@transitops.in",
-                    FINANCIAL_ANALYST: "analyst@transitops.in"
-                  };
-                  setEmail(emails[selectedRole]);
-                }}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-150"
-              >
-                <option value="FLEET_MANAGER">Fleet Manager</option>
-                <option value="DISPATCHER">Dispatcher</option>
-                <option value="SAFETY_OFFICER">Safety Officer</option>
-                <option value="FINANCIAL_ANALYST">Financial Analyst</option>
-              </select>
-            </div>
-
-            {/* Error Message Box */}
-            {errorState && (
-              <div className="bg-red-950/40 border border-red-800/60 rounded-lg p-3 text-[11px] text-red-400 flex items-start gap-2.5 animate-in shake-in duration-150">
-                <span className="font-bold text-red-500 uppercase">Error:</span>
-                <div>
-                  <p>{errorState}</p>
-                  <p className="text-[10px] text-red-500/70 mt-0.5">Account locked after 5 failed attempts.</p>
-                </div>
+          {isSignUp ? (
+            <>
+              <div className="mb-6">
+                <h1 className="text-2xl font-bold text-white tracking-tight mb-1.5">Create your account</h1>
+                <p className="text-xs text-slate-400">Join TransitOps to manage fleet operations</p>
               </div>
-            )}
 
-            <div className="flex items-center justify-between text-xs pt-1.5">
-              <label className="flex items-center gap-2 text-slate-400 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  className="rounded bg-slate-900 border-slate-800 text-blue-600 focus:ring-0 focus:ring-offset-0"
-                />
-                <span>Remember me</span>
-              </label>
-              <span className="text-blue-500 hover:underline cursor-pointer">Forgot password?</span>
-            </div>
+              <form onSubmit={handleSignUp} className="space-y-4">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    value={signUpName}
+                    onChange={(e) => setSignUpName(e.target.value)}
+                    placeholder="e.g. Vikram Mehta"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3.5 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-150"
+                    required
+                  />
+                </div>
 
-            <button
-              type="submit"
-              className="w-full bg-[#B26A00] hover:bg-[#8F5500] active:scale-[0.99] text-white rounded-lg py-3 text-xs font-semibold transition-all duration-150 mt-4 shadow-lg shadow-orange-950/20"
-            >
-              Sign In
-            </button>
-          </form>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={signUpEmail}
+                    onChange={(e) => setSignUpEmail(e.target.value)}
+                    placeholder="e.g. manager@transitops.in"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3.5 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-150"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={signUpPassword}
+                    onChange={(e) => setSignUpPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3.5 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-150"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Assign Role (RBAC Scope)
+                  </label>
+                  <select
+                    value={signUpRole}
+                    onChange={(e) => setSignUpRole(e.target.value as Role)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-150"
+                  >
+                    <option value="FLEET_MANAGER">Fleet Manager</option>
+                    <option value="DRIVER">Driver</option>
+                    <option value="SAFETY_OFFICER">Safety Officer</option>
+                    <option value="FINANCIAL_ANALYST">Financial Analyst</option>
+                  </select>
+                </div>
+
+                {/* Error Message Box */}
+                {errorState && (
+                  <div className="bg-red-950/40 border border-red-800/60 rounded-lg p-3 text-[11px] text-red-400 flex items-start gap-2.5 animate-in shake-in duration-150">
+                    <span className="font-bold text-red-500 uppercase">Error:</span>
+                    <p>{errorState}</p>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full bg-[#B26A00] hover:bg-[#8F5500] active:scale-[0.99] text-white rounded-lg py-2.5 text-xs font-semibold transition-all duration-150 mt-2 shadow-lg shadow-orange-950/20"
+                >
+                  Create Account
+                </button>
+
+                <div className="text-center text-xs text-slate-400 mt-4">
+                  Already have an account?{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSignUp(false);
+                      setErrorState(null);
+                    }}
+                    className="text-blue-500 hover:underline font-medium"
+                  >
+                    Sign In here
+                  </button>
+                </div>
+              </form>
+            </>
+          ) : (
+            <>
+              <div className="mb-6">
+                <h1 className="text-2xl font-bold text-white tracking-tight mb-1.5">Sign in to your account</h1>
+                <p className="text-xs text-slate-400">Enter your credentials to continue</p>
+              </div>
+
+              <form onSubmit={handleSignIn} className="space-y-4">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3.5 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-150"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3.5 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-150"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Role (RBAC)
+                  </label>
+                  <select
+                    value={role}
+                    onChange={(e) => {
+                      const selectedRole = e.target.value as Role;
+                      setRole(selectedRole);
+                      // Match email helper to make demo signin easy
+                      const emails: Record<Role, string> = {
+                        FLEET_MANAGER: "manager@transitops.in",
+                        DRIVER: "driver@transitops.in",
+                        SAFETY_OFFICER: "safety@transitops.in",
+                        FINANCIAL_ANALYST: "analyst@transitops.in"
+                      };
+                      setEmail(emails[selectedRole]);
+                    }}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-150"
+                  >
+                    <option value="FLEET_MANAGER">Fleet Manager</option>
+                    <option value="DRIVER">Driver</option>
+                    <option value="SAFETY_OFFICER">Safety Officer</option>
+                    <option value="FINANCIAL_ANALYST">Financial Analyst</option>
+                  </select>
+                </div>
+
+                {/* Error Message Box */}
+                {errorState && (
+                  <div className="bg-red-950/40 border border-red-800/60 rounded-lg p-3 text-[11px] text-red-400 flex items-start gap-2.5 animate-in shake-in duration-150">
+                    <span className="font-bold text-red-500 uppercase">Error:</span>
+                    <p>{errorState}</p>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <label className="flex items-center gap-2 text-slate-400 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      defaultChecked
+                      className="rounded bg-slate-900 border-slate-800 text-blue-600 focus:ring-0 focus:ring-offset-0 animate-none"
+                    />
+                    <span>Remember me</span>
+                  </label>
+                  <span className="text-blue-500 hover:underline cursor-pointer">Forgot password?</span>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-[#B26A00] hover:bg-[#8F5500] active:scale-[0.99] text-white rounded-lg py-2.5 text-xs font-semibold transition-all duration-150 mt-2 shadow-lg shadow-orange-950/20"
+                >
+                  Sign In
+                </button>
+
+                <div className="text-center text-xs text-slate-400 mt-4">
+                  Don&apos;t have an account?{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSignUp(true);
+                      setErrorState(null);
+                    }}
+                    className="text-blue-500 hover:underline font-medium"
+                  >
+                    Register here
+                  </button>
+                </div>
+              </form>
+            </>
+          )}
 
           {/* Quick instructions text */}
           <div className="mt-8 pt-6 border-t border-slate-800/40 text-[10px] text-slate-500 leading-relaxed text-center">
             Access is scoped by role after login:<br />
-            • Manager → Fleet, Maintenance | • Dispatcher → Dashboard, Trips<br />
+            • Manager → Fleet, Maintenance | • Driver → Dashboard, Trips<br />
             • Safety → Drivers, Compliance | • Financial → Expenses, Analytics
           </div>
         </div>

@@ -113,6 +113,8 @@ interface TransitOpsState {
   // Auth state
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
+  registeredUsers: (User & { password?: string })[];
+  registerUser: (user: Omit<User & { password?: string }, "id">) => { success: boolean; error?: string };
   
   // Data arrays
   vehicles: Vehicle[];
@@ -280,6 +282,7 @@ const LOCAL_STORAGE_KEY = "transitops_v1_store";
 const getInitialState = () => {
   const defaults = {
     currentUser: PREDEFINED_USERS["driver@transitops.in"], // Default to Driver (Raven K.) for mockup matching
+    registeredUsers: Object.values(PREDEFINED_USERS),
     vehicles: SEED_VEHICLES,
     drivers: SEED_DRIVERS,
     trips: SEED_TRIPS,
@@ -318,6 +321,7 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
       const current = get();
       const stateToSave = {
         currentUser: current.currentUser,
+        registeredUsers: current.registeredUsers,
         vehicles: current.vehicles,
         drivers: current.drivers,
         trips: current.trips,
@@ -699,12 +703,27 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
       saveState({ notifications: [] });
     },
 
+    registerUser: (user) => {
+      const existing = get().registeredUsers.find((u) => u.email === user.email);
+      if (existing) {
+        return { success: false, error: "An account with this email already exists." };
+      }
+      set((state) => {
+        const updated = [...state.registeredUsers, user];
+        saveState({ registeredUsers: updated });
+        return { registeredUsers: updated };
+      });
+      get().addActivity("system", `New user registered: ${user.name} (${user.role}).`);
+      return { success: true };
+    },
+
     resetAllData: () => {
       if (typeof window !== "undefined") {
         localStorage.removeItem(LOCAL_STORAGE_KEY);
       }
       set({
         currentUser: PREDEFINED_USERS["driver@transitops.in"],
+        registeredUsers: Object.values(PREDEFINED_USERS),
         vehicles: SEED_VEHICLES,
         drivers: SEED_DRIVERS,
         trips: SEED_TRIPS,
