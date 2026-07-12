@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useTransitStore } from "@/lib/store";
-import { Settings as SettingsIcon, Shield, Save } from "lucide-react";
+import { Settings as SettingsIcon, Save } from "lucide-react";
 import { toast } from "sonner";
 
 export default function SettingsPage() {
@@ -28,16 +28,8 @@ export default function SettingsPage() {
     toast.success("General settings updated successfully.");
   };
 
-  // RBAC Permission Grid Matrix
-  const rbacMatrix: Array<{ role: string; fleet: string; drivers: string; trips: string; fuelExp: string; analytics: string }> = [
-    { role: "Fleet Manager", fleet: "✓ Write", drivers: "✓ Write", trips: "— No Access", fuelExp: "— No Access", analytics: "✓ Write" },
-    { role: "Driver", fleet: "View Only", drivers: "— No Access", trips: "✓ Write", fuelExp: "— No Access", analytics: "— No Access" },
-    { role: "Safety Officer", fleet: "— No Access", drivers: "✓ Write", trips: "View Only", fuelExp: "— No Access", analytics: "— No Access" },
-    { role: "Financial Analyst", fleet: "View Only", drivers: "— No Access", trips: "— No Access", fuelExp: "✓ Write", analytics: "✓ Write" },
-  ];
-
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 animate-in fade-in duration-200">
+    <div className="max-w-xl mx-auto w-full animate-in fade-in duration-200">
       {/* Column 1: General settings */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs h-fit space-y-6">
         <div>
@@ -108,64 +100,6 @@ export default function SettingsPage() {
             </div>
           )}
         </form>
-      </div>
-
-      {/* Column 2: Role-Based Access Control (RBAC) */}
-      <div className="xl:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden flex flex-col">
-        <div className="px-6 py-4.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
-          <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-          <div>
-            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">Role-Based Access Control (RBAC)</h2>
-            <p className="text-[10px] text-slate-400">Permissions matrix enforcing module visibility scopes.</p>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto flex-1">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/40 text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
-                <th className="px-6 py-3.5">Role</th>
-                <th className="px-6 py-3.5">Fleet</th>
-                <th className="px-6 py-3.5">Drivers</th>
-                <th className="px-6 py-3.5">Trips</th>
-                <th className="px-6 py-3.5">Fuel/Exp.</th>
-                <th className="px-6 py-3.5">Analytics</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs text-slate-700 dark:text-slate-300">
-              {rbacMatrix.map((matrix, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
-                  <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">{matrix.role}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${matrix.fleet.includes("✓") ? "bg-emerald-500/10 text-emerald-600" : matrix.fleet.includes("View") ? "bg-blue-500/10 text-blue-600" : "text-slate-400"}`}>
-                      {matrix.fleet}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${matrix.drivers.includes("✓") ? "bg-emerald-500/10 text-emerald-600" : matrix.drivers.includes("View") ? "bg-blue-500/10 text-blue-600" : "text-slate-400"}`}>
-                      {matrix.drivers}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${matrix.trips.includes("✓") ? "bg-emerald-500/10 text-emerald-600" : matrix.trips.includes("View") ? "bg-blue-500/10 text-blue-600" : "text-slate-400"}`}>
-                      {matrix.trips}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${matrix.fuelExp.includes("✓") ? "bg-emerald-500/10 text-emerald-600" : matrix.fuelExp.includes("View") ? "bg-blue-500/10 text-blue-600" : "text-slate-400"}`}>
-                      {matrix.fuelExp}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${matrix.analytics.includes("✓") ? "bg-emerald-500/10 text-emerald-600" : matrix.analytics.includes("View") ? "bg-blue-500/10 text-blue-600" : "text-slate-400"}`}>
-                      {matrix.analytics}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </div>
     </div>
   );
