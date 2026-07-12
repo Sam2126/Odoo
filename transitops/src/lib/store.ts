@@ -261,18 +261,7 @@ const LOCAL_STORAGE_KEY = "transitops_v1_store";
 
 // Helper to load state from local storage or use defaults
 const getInitialState = () => {
-  if (typeof window !== "undefined") {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return parsed;
-      } catch (e) {
-        console.error("Failed to parse local storage", e);
-      }
-    }
-  }
-  return {
+  const defaults = {
     currentUser: PREDEFINED_USERS["dispatcher@transitops.in"], // Default to Dispatcher (Raven K.) for mockup matching
     vehicles: SEED_VEHICLES,
     drivers: SEED_DRIVERS,
@@ -288,6 +277,22 @@ const getInitialState = () => {
     notifications: SEED_NOTIFICATIONS,
     activities: SEED_ACTIVITIES
   };
+
+  if (typeof window !== "undefined") {
+    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          ...defaults,
+          ...parsed
+        };
+      } catch (e) {
+        console.error("Failed to parse local storage", e);
+      }
+    }
+  }
+  return defaults;
 };
 
 export const useTransitStore = create<TransitOpsState>((set, get) => {
