@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useTransitStore, PREDEFINED_USERS, Role } from "@/lib/store";
+import { useTransitStore, PREDEFINED_USERS, Role, getPermission } from "@/lib/store";
 import {
   LayoutDashboard,
   Truck,
@@ -22,7 +22,8 @@ import {
   LogOut,
   Sparkles,
   Command,
-  HelpCircle
+  HelpCircle,
+  Shield
 } from "lucide-react";
 import CommandPalette from "./CommandPalette";
 import DemoTour from "./DemoTour";
@@ -96,6 +97,23 @@ export default function AppShell({ children }: AppShellProps) {
     { name: "Settings", href: "/settings", icon: SettingsIcon },
   ];
 
+  const moduleKeyMap: Record<string, 'fleet' | 'drivers' | 'trips' | 'maintenance' | 'fuelExp' | 'analytics' | null> = {
+    "/dashboard": null,
+    "/fleet": "fleet",
+    "/drivers": "drivers",
+    "/trips": "trips",
+    "/maintenance": "maintenance",
+    "/fuel-expenses": "fuelExp",
+    "/analytics": "analytics",
+    "/settings": null,
+  };
+
+  const visibleLinks = navLinks.filter(link => {
+    const key = moduleKeyMap[link.href];
+    if (!key) return true;
+    return getPermission(currentUser.role, key) !== 'none';
+  });
+
   // Map roles to displays
   const roleDisplay: Record<Role, string> = {
     FLEET_MANAGER: "Fleet Manager",
@@ -105,6 +123,8 @@ export default function AppShell({ children }: AppShellProps) {
   };
 
   const activeLink = navLinks.find((link) => pathname.startsWith(link.href)) || navLinks[0];
+  const currentKey = moduleKeyMap[pathname];
+  const hasPageAccess = currentKey ? getPermission(currentUser.role, currentKey) !== 'none' : true;
 
   return (
     <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950 transition-colors duration-200">
@@ -140,7 +160,7 @@ export default function AppShell({ children }: AppShellProps) {
 
           {/* Navigation Links */}
           <nav className="p-3 space-y-1">
-            {navLinks.map((link) => {
+            {visibleLinks.map((link) => {
               const Icon = link.icon;
               const isActive = pathname.startsWith(link.href) || (link.href === "/dashboard" && pathname === "/");
               return (
@@ -342,7 +362,25 @@ export default function AppShell({ children }: AppShellProps) {
 
         {/* Page Area */}
         <main className="flex-1 overflow-y-auto p-8 relative">
-          {children}
+          {hasPageAccess ? (
+            children
+          ) : (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 animate-in fade-in duration-200">
+              <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-4 text-red-500">
+                <Shield className="w-8 h-8" />
+              </div>
+              <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">Access Restricted</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-sm">
+                Your current role <strong>{roleDisplay[currentUser.role]}</strong> is not authorized to view the <strong>{activeLink.name}</strong> module.
+              </p>
+              <button 
+                onClick={() => setShowRoleMenu(true)}
+                className="mt-6 bg-[#1E3A5F] hover:bg-[#152a46] text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-md transition-all active:scale-95"
+              >
+                Switch User Role
+              </button>
+            </div>
+          )}
         </main>
       </div>
 

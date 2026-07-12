@@ -608,3 +608,41 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
     }
   };
 });
+
+export function getPermission(role: Role, module: 'fleet' | 'drivers' | 'trips' | 'maintenance' | 'fuelExp' | 'analytics'): 'write' | 'view' | 'none' {
+  const matrix: Record<Role, Record<string, 'write' | 'view' | 'none'>> = {
+    FLEET_MANAGER: {
+      fleet: 'write',
+      drivers: 'write',
+      trips: 'none',
+      maintenance: 'write',
+      fuelExp: 'none',
+      analytics: 'write'
+    },
+    DISPATCHER: {
+      fleet: 'view',
+      drivers: 'none',
+      trips: 'write',
+      maintenance: 'none',
+      fuelExp: 'none',
+      analytics: 'none'
+    },
+    SAFETY_OFFICER: {
+      fleet: 'none',
+      drivers: 'write',
+      trips: 'view',
+      maintenance: 'none',
+      fuelExp: 'none',
+      analytics: 'none'
+    },
+    FINANCIAL_ANALYST: {
+      fleet: 'view',
+      drivers: 'none',
+      trips: 'none',
+      maintenance: 'none',
+      fuelExp: 'write',
+      analytics: 'write'
+    }
+  };
+  return matrix[role][module];
+}
