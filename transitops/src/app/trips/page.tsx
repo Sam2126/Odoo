@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { useTransitStore, TripStatus, getPermission } from "@/lib/store";
-import { Compass, AlertTriangle, ShieldCheck, X, Check, Play, Ban, ChevronRight } from "lucide-react";
+import { useTransitStore, getPermission, isLicenseExpired } from "@/lib/store";
+import { Compass, AlertTriangle, X, Check, Play, Ban, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Trips() {
@@ -31,12 +31,11 @@ export default function Trips() {
 
   // Available drivers list (Must not be Suspended, Off Duty, or On Trip, and license must not be expired)
   const availableDrivers = drivers.filter(
-    (d) => d.status === "Available" && !d.licenseExpiry.toUpperCase().includes("EXPIRED")
+    (d) => d.status === "Available" && !isLicenseExpired(d.licenseExpiry)
   );
 
   // Live selected vehicle and capacity calculation
   const selectedVehicleObj = vehicles.find((v) => v.id === selectedVehicleId);
-  const selectedDriverObj = drivers.find((d) => d.id === selectedDriverId);
 
   const capacityLimit = selectedVehicleObj ? selectedVehicleObj.capacity : 0;
   const isOverweight = Number(cargoWeight) > capacityLimit;
