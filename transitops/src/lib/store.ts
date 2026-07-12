@@ -85,6 +85,13 @@ export interface Settings {
   distanceUnit: string;
 }
 
+export interface ActivityLog {
+  id: string;
+  type: "trip" | "maintenance" | "completion" | "expense" | "system";
+  text: string;
+  timestamp: string;
+}
+
 // Initial Predefined Users (Credentials for RBAC)
 export const PREDEFINED_USERS: Record<string, User & { password?: string }> = {
   "manager@transitops.in": { name: "Vikram Mehta", role: "FLEET_MANAGER", email: "manager@transitops.in" },
@@ -107,6 +114,10 @@ interface TransitOpsState {
   expenses: Expense[];
   settings: Settings;
   notifications: Array<{ id: string; type: "info" | "warning" | "error" | "success"; message: string; date: string }>;
+  activities: ActivityLog[];
+
+  // Mutations
+  addActivity: (type: ActivityLog["type"], text: string) => void;
 
   // Mutations
   addVehicle: (vehicle: Omit<Vehicle, "id">) => { success: boolean; error?: string };
@@ -239,6 +250,13 @@ const SEED_NOTIFICATIONS = [
   { id: "n4", type: "success" as const, message: "Trip TR002 completed successfully. Revenue logged.", date: "Yesterday" }
 ];
 
+const SEED_ACTIVITIES: ActivityLog[] = [
+  { id: "a1", type: "trip", text: "Trip TR001 dispatched to Ahmedabad Hub.", timestamp: "10 mins ago" },
+  { id: "a2", type: "maintenance", text: "Vehicle VAN-05 put into maintenance shop (Oil Change).", timestamp: "1 hour ago" },
+  { id: "a3", type: "completion", text: "Trip TR002 completed. Odometer updated to 182,000 km.", timestamp: "4 hours ago" },
+  { id: "a4", type: "expense", text: "Toll log of ₹120 submitted for Trip TR001.", timestamp: "5 hours ago" }
+];
+
 const LOCAL_STORAGE_KEY = "transitops_v1_store";
 
 // Helper to load state from local storage or use defaults
@@ -267,7 +285,8 @@ const getInitialState = () => {
       currency: "INR (Rs)",
       distanceUnit: "Kilometers"
     },
-    notifications: SEED_NOTIFICATIONS
+    notifications: SEED_NOTIFICATIONS,
+    activities: SEED_ACTIVITIES
   };
 };
 
@@ -285,6 +304,7 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
         expenses: current.expenses,
         settings: current.settings,
         notifications: current.notifications,
+        activities: current.activities,
         ...newState
       };
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(stateToSave));
@@ -295,6 +315,18 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
 
   return {
     ...initialState,
+
+    addActivity: (type, text) => {
+      const newLog: ActivityLog = {
+        id: `act_${Date.now()}`,
+        type,
+        text,
+        timestamp: "Just now"
+      };
+      const updated = [newLog, ...get().activities].slice(0, 50); // limit to last 50 activities
+      set({ activities: updated });
+      saveState({ activities: updated });
+    },
 
     setCurrentUser: (user) => {
       set({ currentUser: user });
@@ -318,6 +350,7 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
         saveState({ vehicles: updated });
         return { vehicles: updated };
       });
+      get().addActivity("system", `Registered new vehicle ${vehicle.model} (${vehicle.regNumber.toUpperCase()}).`);
       return { success: true };
     },
 
@@ -346,6 +379,7 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
         saveState({ drivers: updated });
         return { drivers: updated };
       });
+      get().addActivity("system", `Registered new driver ${driver.name}.`);
       return { success: true };
     },
 
@@ -387,7 +421,7 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
         saveState({ trips: updated });
         return { trips: updated };
       });
-
+      get().addActivity("trip", `Trip draft ${tripId} created from ${trip.source} to ${trip.destination}.`);
       return { success: true };
     },
 
@@ -415,7 +449,7 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
         saveState({ trips: updatedTrips, vehicles: updatedVehicles, drivers: updatedDrivers });
         return { trips: updatedTrips, vehicles: updatedVehicles, drivers: updatedDrivers };
       });
-
+      get().addActivity("trip", `Trip ${id} dispatched to ${trip.destination}.`);
       return { success: true };
     },
 
@@ -480,7 +514,7 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
           notifications: updatedNotifications
         };
       });
-
+      get().addActivity("completion", `Trip ${id} completed. Odometer updated to ${finalOdometer} km.`);
       return { success: true };
     },
 
@@ -505,7 +539,7 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
         saveState({ trips: updatedTrips, vehicles: updatedVehicles, drivers: updatedDrivers });
         return { trips: updatedTrips, vehicles: updatedVehicles, drivers: updatedDrivers };
       });
-
+      get().addActivity("trip", `Trip ${id} cancelled. Vehicle & driver released.`);
       return { success: true };
     },
 
@@ -529,12 +563,17 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
         saveState({ maintenanceLogs: updatedLogs, vehicles: updatedVehicles });
         return { maintenanceLogs: updatedLogs, vehicles: updatedVehicles };
       });
+      const vehicle = get().vehicles.find((v) => v.id === log.vehicleId);
+      get().addActivity("maintenance", `Vehicle ${vehicle ? vehicle.model : "Vehicle"} put into maintenance shop (${log.description}).`);
     },
 
     closeMaintenanceLog: (id) => {
+      const logToClose = get().maintenanceLogs.find((l) => l.id === id);
+      const vehicle = logToClose ? get().vehicles.find((v) => v.id === logToClose.vehicleId) : null;
+
       set((state) => {
-        const logToClose = state.maintenanceLogs.find((l) => l.id === id);
-        if (!logToClose) return {};
+        const logToCloseObj = state.maintenanceLogs.find((l) => l.id === id);
+        if (!logToCloseObj) return {};
 
         const updatedLogs = state.maintenanceLogs.map((l) =>
           l.id === id ? { ...l, status: "Closed" as const } : l
@@ -542,7 +581,7 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
 
         // Closing maintenance restores vehicle to Available (unless retired)
         const updatedVehicles = state.vehicles.map((v) =>
-          v.id === logToClose.vehicleId && v.status === "In Shop"
+          v.id === logToCloseObj.vehicleId && v.status === "In Shop"
             ? { ...v, status: "Available" as VehicleStatus }
             : v
         );
@@ -550,6 +589,7 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
         saveState({ maintenanceLogs: updatedLogs, vehicles: updatedVehicles });
         return { maintenanceLogs: updatedLogs, vehicles: updatedVehicles };
       });
+      get().addActivity("maintenance", `Vehicle ${vehicle ? vehicle.model : "Vehicle"} released from maintenance shop.`);
     },
 
     addFuelLog: (log) => {
@@ -562,6 +602,8 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
         saveState({ fuelLogs: updated });
         return { fuelLogs: updated };
       });
+      const vehicle = get().vehicles.find((v) => v.id === log.vehicleId);
+      get().addActivity("expense", `Fuel purchase log of ₹${log.cost.toLocaleString()} logged for ${vehicle ? vehicle.model : "Vehicle"}.`);
     },
 
     addExpense: (expense) => {
@@ -574,6 +616,8 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
         saveState({ expenses: updated });
         return { expenses: updated };
       });
+      const vehicle = get().vehicles.find((v) => v.id === expense.vehicleId);
+      get().addActivity("expense", `Expense of ₹${expense.amount.toLocaleString()} (${expense.description}) logged for ${vehicle ? vehicle.model : "Vehicle"}.`);
     },
 
     updateSettings: (settings) => {
@@ -603,7 +647,8 @@ export const useTransitStore = create<TransitOpsState>((set, get) => {
           currency: "INR (Rs)",
           distanceUnit: "Kilometers"
         },
-        notifications: SEED_NOTIFICATIONS
+        notifications: SEED_NOTIFICATIONS,
+        activities: SEED_ACTIVITIES
       });
     }
   };
